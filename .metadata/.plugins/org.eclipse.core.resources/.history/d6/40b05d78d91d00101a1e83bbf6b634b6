@@ -1,0 +1,211 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
+
+public class WordTutor {
+
+    private static final String DATA_FILE = "data.dat";
+    private static List<Question> questions = new ArrayList<>();
+    private static int currentQuestionIndex = 0;
+    private static JFrame studyFrame;
+    private static JLabel questionLabel;
+    private static JTextField answerField;
+    private static JTextArea resultTextArea;
+    private static TrayIcon trayIcon;
+    private static boolean answerShown = false;
+    private static Point initialClick;
+    private static Point frameLocation = null; // 프레임 위치 저장 변수
+
+    private static class Question {
+        String question;
+        String answer;
+
+        public Question(String question, String answer) {
+            this.question = question;
+            this.answer = answer;
+        }
+    }
+
+    public static void main(String[] args) {
+        // AWT 이벤트 스레드에서 GUI 생성 및 실행
+        SwingUtilities.invokeLater(() -> {
+            if (!SystemTray.isSupported()) {
+                System.out.println("SystemTray is not supported");
+                return;
+            }
+
+            PopupMenu popup = new PopupMenu();
+            MenuItem startItem = new MenuItem("학습 시작");
+            MenuItem exitItem = new MenuItem("종료");
+
+            // 학습 시작 메뉴 아이템 액션 리스너
+            startItem.addActionListener(e -> showStudyWindow());
+
+            // 종료 메뉴 아이템 액션 리스너
+            exitItem.addActionListener(e -> {
+                SystemTray.getSystemTray().remove(trayIcon);
+                System.exit(0);
+            });
+
+            popup.add(startItem);
+            popup.add(exitItem);
+
+            // 트레이 아이콘 설정
+            Image image = Toolkit.getDefaultToolkit().getImage("icon.png"); // icon.png 파일 필요
+            trayIcon = new TrayIcon(image, "WordTutor", popup); // 프로젝트 이름 변경
+            trayIcon.setImageAutoSize(true);
+
+            try {
+                SystemTray.getSystemTray().add(trayIcon);
+            } catch (AWTException e) {
+                System.out.println("TrayIcon could not be added.");
+            }
+
+            loadQuestions(); // 문제 데이터 로드
+            showStudyWindow(); // 프로그램 시작 시 바로 학습 시작
+        });
+    }
+
+    private static void loadQuestions() {
+        try (Scanner scanner = new Scanner(new File(DATA_FILE), "UTF-8")) {
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine().trim();
+                if (!line.isEmpty()) {
+                    String[] parts = line.split("@@@");
+                    if (parts.length == 2) {
+                        questions.add(new Question(parts[0].trim(), parts[1].trim()));
+                    } else {
+                        System.err.println("잘못된 형식의 줄 발견: " + line);
+                    }
+                }
+            }
+        } catch (FileNotFoundException e) {
+            JOptionPane.showMessageDialog(null, DATA_FILE + " 파일을 찾을 수 없습니다.", "오류", JOptionPane.ERROR_MESSAGE);
+            System.exit(1);
+        }
+    }
+
+    private static void showStudyWindow() {
+        if (studyFrame == null || !studyFrame.isShowing()) {
+            studyFrame = new JFrame("WordTutor");
+            studyFrame.setUndecorated(true);
+            studyFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+            studyFrame.setLayout(new BorderLayout());
+            studyFrame.setResizable(false);
+
+            // 드래그 기능 구현
+            JPanel titleBar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            titleBar.addMouseListener(new MouseAdapter() {
+                public void mousePressed(MouseEvent e) {
+                    initialClick = e.getPoint();
+                    studyFrame.getComponentAt(initialClick);
+                }
+            });
+            titleBar.addMouseMotionListener(new MouseMotionAdapter() {
+                @Override
+                public void mouseDragged(MouseEvent e) {
+                    // get location of Window
+                    int thisX = studyFrame.getLocation().x;
+                    int thisY = studyFrame.getLocation().y;
+
+                    // determine how much the mouse moved since the initial click
+                    int xMoved = e.getX() - initialClick.x;
+                    int yMoved = e.getY() - initialClick.y;
+
+                    // move window to this position
+                    int X = thisX + xMoved;
+                    int Y = thisY + yMoved;
+                    studyFrame.setLocation(X, Y);
+                    frameLocation = studyFrame.getLocation(); // 현재 위치 저장
+                }
+            });
+            studyFrame.add(titleBar, BorderLayout.NORTH);
+
+            questionLabel = new JLabel("", SwingConstants.CENTER);
+            questionLabel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+            studyFrame.add(questionLabel, BorderLayout.CENTER);
+
+            JPanel inputPanel = new JPanel(new BorderLayout());
+            answerField = new JTextField(30); // 텍스트 필드 가로 길이 늘림
+            answerField.setHorizontalAlignment(JTextField.CENTER);
+            inputPanel.add(answerField, BorderLayout.NORTH);
+
+            resultTextArea = new JTextArea(5, 30); // 텍스트 영역 행과 열 늘림
+            resultTextArea.setLineWrap(true);
+            resultTextArea.setWrapStyleWord(true);
+            resultTextArea.setEditable(false);
+            JScrollPane resultScrollPane = new JScrollPane(resultTextArea);
+            inputPanel.add(resultScrollPane, BorderLayout.SOUTH);
+
+            studyFrame.add(inputPanel, BorderLayout.SOUTH);
+
+            answerField.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    if (answerShown) {
+                        currentQuestionIndex++;
+                        showQuestion();
+                    } else {
+                        checkAnswer();
+                    }
+                }
+            });
+
+            showQuestion();
+            studyFrame.setSize(350, studyFrame.getPreferredSize().height); // 초기 가로 길이 설정
+            if (frameLocation != null) {
+                studyFrame.setLocation(frameLocation);
+            } else {
+                studyFrame.setLocationRelativeTo(null);
+            }
+            studyFrame.setVisible(true);
+        } else {
+            studyFrame.toFront();
+        }
+    }
+
+    private static void showQuestion() {
+        answerShown = false;
+        resultTextArea.setText("");
+        if (!questions.isEmpty() && currentQuestionIndex < questions.size()) {
+            questionLabel.setText(questions.get(currentQuestionIndex).question);
+            answerField.setText("");
+            adjustFrameSize(); // 프레임 크기 재조정
+            answerField.requestFocusInWindow(); // 답변 필드에 포커스
+        } else {
+            JOptionPane.showMessageDialog(studyFrame, "모든 문제를 완료했습니다.", "알림", JOptionPane.INFORMATION_MESSAGE);
+            currentQuestionIndex = 0;
+            showQuestion();
+        }
+    }
+
+    private static void checkAnswer() {
+        if (!answerShown && !questions.isEmpty() && currentQuestionIndex < questions.size()) {
+            String userAnswer = answerField.getText().trim();
+            String correctAnswer = questions.get(currentQuestionIndex).answer;
+
+            resultTextArea.setText("정답: '" + correctAnswer + "'\n입력: '" + userAnswer + "'"); // JTextArea에 결과 표시
+            if (userAnswer.equals(correctAnswer)) {
+                resultTextArea.setForeground(Color.BLUE);
+            } else {
+                resultTextArea.setForeground(Color.RED);
+            }
+            adjustFrameSize(); // 프레임 크기 재조정
+            answerShown = true;
+        }
+    }
+
+    private static void adjustFrameSize() {
+        if (studyFrame != null) {
+            int initialWidth = 350; // 초기 가로 길이 설정
+            Dimension currentSize = studyFrame.getSize();
+            studyFrame.pack();
+            studyFrame.setSize(initialWidth, studyFrame.getSize().height); // 가로 길이는 초기값으로, 세로는 내용에 맞게
+            studyFrame.setLocation(studyFrame.getLocation()); // 위치 유지
+        }
+    }
+}

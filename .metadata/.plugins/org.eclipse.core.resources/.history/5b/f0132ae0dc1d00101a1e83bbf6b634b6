@@ -1,0 +1,76 @@
+package wordtutor;
+
+import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
+import java.util.Scanner;
+
+public class WordTutor {
+
+    // ... (기존 코드)
+
+    public static void main(String[] args) {
+        // AWT 이벤트 스레드에서 GUI 생성 및 실행
+        SwingUtilities.invokeLater(() -> {
+            if (!SystemTray.isSupported()) {
+                System.out.println("SystemTray is not supported");
+                return;
+            }
+
+            PopupMenu popup = new PopupMenu();
+            MenuItem startItem = new MenuItem("학습 시작");
+            MenuItem openDataItem = new MenuItem("데이터 파일 열기");
+            MenuItem createDataItem = new MenuItem("데이터 파일 변환 저장");
+            popup.add(startItem);
+            popup.add(openDataItem);
+            popup.add(createDataItem);
+            popup.addSeparator(); // 구분선 추가
+            MenuItem blogItem = new MenuItem("제작자 블로그"); // 블로그 연결 메뉴
+            MenuItem exitItem = new MenuItem("종료");
+
+            blogItem.addActionListener(e -> openBlog());
+            exitItem.addActionListener(e -> {
+                SystemTray.getSystemTray().remove(trayIcon);
+                System.exit(0);
+            });
+            startItem.addActionListener(e -> showStudyWindow());
+            openDataItem.addActionListener(e -> openDataFileDialog());
+            createDataItem.addActionListener(e -> showConvertAndSaveDialog());
+
+            popup.add(blogItem); // 블로그 메뉴 추가
+            popup.add(exitItem);
+
+            // 트레이 아이콘 설정
+            URL imageUrl = ClassLoader.getSystemResource("wordtutor/resources/icon.png");
+            if (imageUrl == null) {
+                System.err.println("Error: wordtutor/resources/icon.png not found!");
+                // 기본 이미지 로드 또는 프로그램 종료 등의 대체 처리 고려
+                return;
+            }
+            Image image = Toolkit.getDefaultToolkit().getImage(imageUrl);
+            trayIcon = new TrayIcon(image, "WordTutor", popup);
+            trayIcon.setImageAutoSize(true);
+
+            try {
+                SystemTray.getSystemTray().add(trayIcon);
+            } catch (AWTException e) {
+                System.out.println("TrayIcon could not be added.");
+            }
+
+            loadQuestions(DATA_FILE);
+            showStudyWindow();
+        });
+    }
+
+    // ... (나머지 기존 코드)
+}
