@@ -32,7 +32,7 @@ Further instructions on how to study the vocabulary words will depend on the spe
 
 ## Author
 
-* REDUCTO
+* REDUCTO (https://tutoreducto.tistory.com/639)
 
 ## Creation Date
 
